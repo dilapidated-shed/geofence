@@ -46,6 +46,22 @@ Curry also coauthored a formal 2012 publication relevant to sensing and network-
 
 That paper belongs in the project’s initial bibliography, although Curry’s dissertation is the more direct written source for the cover, nerve, sheaf, and cosheaf ideas.
 
+## XOR’s Hammer and CGP Grey
+
+A direct conceptual precedent for representing a named geographic category as assumption-dependent data is:
+
+> mkoconnor, “The CGP Grey Sheaf of Continents,” *XOR’s Hammer*, July 24, 2016.
+
+- [Blog post](https://xorshammer.com/2016/07/24/the-cgp-grey-topos-of-continents/)
+
+The post develops the geographic ambiguity presented in:
+
+> CGP Grey, “What are Continents?”, YouTube video, September 15, 2011.
+
+- [Video](https://www.youtube.com/watch?v=3uBcq1x7P34)
+
+The attribution is intentionally split. CGP Grey supplies the geographic example: the number and identity of continents vary with conventions about minimum size, land bridges, canals, and cultural division. XOR’s Hammer supplies the mathematical move: treat the collection of continents as a variable set, specifically a set-valued sheaf over parameters encoding those assumptions, and reason about it in the resulting topos. That bridge from an imprecise geographic category to mathematical structure is directly relevant to this repository.
+
 ## Direct supporting foundations
 
 Two earlier papers by Vin de Silva and Robert Ghrist are especially relevant to geofences because they infer coverage from overlap or proximity information without requiring precise node coordinates:

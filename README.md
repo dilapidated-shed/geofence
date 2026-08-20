@@ -12,6 +12,8 @@ This project begins with Robert Ghrist’s work on applied algebraic topology an
 
 Ghrist and Curry receive the first acknowledgment because the central approach explored here—organizing imprecise spatial observations through overlaps, covers, combinatorial topology, and local-to-global data—comes directly out of the mathematical territory they developed and explained.
 
+A direct conceptual precedent on the geographic side is XOR’s Hammer’s [“The CGP Grey Sheaf of Continents”](https://xorshammer.com/2016/07/24/the-cgp-grey-topos-of-continents/), which takes CGP Grey’s [“What are Continents?”](https://www.youtube.com/watch?v=3uBcq1x7P34) and models the changing collection of continents as a set-valued sheaf. CGP Grey is credited for the geographic example and its shifting criteria; XOR’s Hammer is credited for the sheaf and topos formulation.
+
 See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for exact citations and for the distinction between Curry’s 2012 presentations and the stable written sources.
 
 ## Initial questions
