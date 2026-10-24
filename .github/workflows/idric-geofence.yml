@@ -1,0 +1,87 @@
+name: Idriç geofence source acceptance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'idric/**'
+      - 'geofence-idric.ipkg'
+      - '.github/workflows/idric-geofence.yml'
+  pull_request:
+    paths:
+      - 'idric/**'
+      - 'geofence-idric.ipkg'
+      - '.github/workflows/idric-geofence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checked-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out proposed geofence source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Check out pinned exact interval implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dilapidated-shed/intervals.idr
+          ref: b3574ac06101f53a97c10839b420e656bd93bf46
+          path: .deps/intervals
+          persist-credentials: false
+
+      - name: Check out pinned Idriç compiler
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/Idric
+          ref: 94dfd99bd3e376507fedc8611053b7173b2519f0
+          path: .toolchain/idric
+          persist-credentials: false
+
+      - name: Restore compiler bootstrap cache
+        id: compiler-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            .toolchain/idric/_/.tools
+            .toolchain/idric/_/bootstrap-build
+            .toolchain/idric/_/build
+            .toolchain/idric/_/libs/*/build
+            .toolchain/idric/_/support/c
+          key: idric-${{ runner.os }}-94dfd99bd3e376507fedc8611053b7173b2519f0-v2
+
+      - name: Bootstrap compiler if necessary
+        if: steps.compiler-cache.outputs.cache-hit != 'true'
+        run: sh .toolchain/idric/edric bootstrap
+
+      - name: Cache successful compiler bootstrap
+        if: steps.compiler-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            .toolchain/idric/_/.tools
+            .toolchain/idric/_/bootstrap-build
+            .toolchain/idric/_/build
+            .toolchain/idric/_/libs/*/build
+            .toolchain/idric/_/support/c
+          key: idric-${{ runner.os }}-94dfd99bd3e376507fedc8611053b7173b2519f0-v2
+
+      - name: Typecheck geofence with pinned intervals.idr
+        shell: bash
+        run: |
+          ln -s ../.deps/intervals/idric/Interval idric/Interval
+          idric_hidden="$GITHUB_WORKSPACE/.toolchain/idric/_"
+          export PATH="$idric_hidden/.tools/bin:$PATH"
+          export IDRIS2_PATH="$idric_hidden/libs/prelude/build/ttc:$idric_hidden/libs/base/build/ttc:$idric_hidden/libs/linear/build/ttc:$idric_hidden/libs/network/build/ttc:$idric_hidden/libs/contrib/build/ttc:$idric_hidden/libs/test/build/ttc"
+          export IDRIS2_DATA="$idric_hidden/support"
+          export IDRIS2_LIBS="$idric_hidden/support/c"
+          "$idric_hidden/build/exec/idris2" --build geofence-idric.ipkg
+
+      - name: Run checked geofence fixtures
+        run: ./build/exec/geofence-idric-tests

@@ -1,0 +1,6 @@
+package geofence-idric
+version = 0.1.0
+sourcedir = "idric"
+modules = Interval.Exact, Geofence.Cover, Geofence.Latitude, Geofence.Longitude, Geofence.Sphere, Geofence.Check
+main = Geofence.Check
+executable = "geofence-idric-tests"

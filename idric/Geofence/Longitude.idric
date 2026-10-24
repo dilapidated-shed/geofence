@@ -1,0 +1,81 @@
+module Geofence.Longitude
+
+import Geofence.Cover
+import Interval.Exact
+
+%unbound_implicits off
+
+-- A circle is ExactRational degrees modulo 360. This is a chart coordinate
+-- for a circle, not an ordinary longitude interval or a datum coordinate.
+-- Increasing-angle closed arcs include both endpoints. Equal normalized
+-- endpoints describe a singleton; the full circle is a separate value.
+-- In particular, closed_arc 0 360 is a singleton, NOT the full circle.
+-- No floating point, approximate rounding, or chosen epsilon is involved.
+export
+data LongitudeArc : Type where
+  FullLongitudeCircle : LongitudeArc
+  ClosedLongitudeArc : ExactRational → ExactRational → LongitudeArc
+
+-- Denominators in ExactRational are strictly positive. Normalize the signed
+-- numerator by the full-turn numerator, preserving exact fractional degrees.
+public export
+positive_modulus : Integer → Integer → Integer
+positive_modulus numerator period =
+  let remainder = mod numerator period in
+    if remainder < 0 then remainder + period else remainder
+
+public export
+canonical_longitude : ExactRational → ExactRational
+canonical_longitude (Ratio numerator denominator) =
+  Ratio
+    (positive_modulus numerator (360 × denominator_value denominator))
+    denominator
+
+public export
+closed_longitude_arc : ExactRational → ExactRational → LongitudeArc
+closed_longitude_arc start finish =
+  ClosedLongitudeArc (canonical_longitude start) (canonical_longitude finish)
+
+public export
+all_longitudes : LongitudeArc
+all_longitudes = FullLongitudeCircle
+
+-- Cut the circle at zero for *internal calculations only*. A crossing arc
+-- has two closed pieces and therefore contains both 360 and zero as the same
+-- seam point. Consumers must operate on the whole circular object.
+public export
+longitude_pieces : LongitudeArc → LocationEstimate exact_interval
+longitude_pieces FullLongitudeCircle =
+  Candidates (closed_interval (whole 0) (whole 360)) []
+longitude_pieces (ClosedLongitudeArc start finish) =
+  if rational_less_or_equal start finish
+    then Candidates (closed_interval start finish) []
+    else
+      Candidates
+        (closed_interval start (whole 360))
+        [closed_interval (whole 0) finish]
+
+public export
+interval_is_within : exact_interval → exact_interval → Bool
+interval_is_within finer coarser =
+  interval_equal (intersect_interval finer coarser) finer
+
+public export
+intervals_intersect : exact_interval → exact_interval → Bool
+intervals_intersect first second =
+  not (interval_equal (intersect_interval first second) no_points)
+
+-- Every linear piece of the first circular arc must be in some piece of the
+-- second. Both have been cut at the same seam, so this is exact for these
+-- normalized closed arcs (not for arbitrary unions of circular regions).
+public export
+longitude_arc_within : LongitudeArc → LongitudeArc → Bool
+longitude_arc_within finer coarser =
+  cellwise_refines interval_is_within
+    (longitude_pieces finer) (longitude_pieces coarser)
+
+public export
+longitude_arcs_overlap : LongitudeArc → LongitudeArc → Bool
+longitude_arcs_overlap first second =
+  covers_overlap intervals_intersect
+    (longitude_pieces first) (longitude_pieces second)

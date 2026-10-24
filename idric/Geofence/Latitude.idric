@@ -1,0 +1,80 @@
+module Geofence.Latitude
+
+import Geofence.Cover
+import Interval.Exact
+
+%unbound_implicits off
+
+-- A latitude band is a one-dimensional chart-axis region, not an Earth point
+-- and not a WGS84/spherical geofence. Longitude is periodic and must not be
+-- represented by a second ordinary linear interval.
+--
+-- The constructor is intentionally not public. Clients must validate the
+-- nonempty closed range and its degree bounds through make_latitude_band.
+export
+data LatitudeBand : Type where
+  ValidLatitudeBand : exact_interval → LatitudeBand
+
+public export
+latitude_domain : exact_interval
+latitude_domain = closed_interval (whole (-90)) (whole 90)
+
+public export
+is_valid_latitude : exact_interval → Bool
+is_valid_latitude interval =
+  not (interval_equal interval no_points) &&
+  interval_equal (intersect_interval interval latitude_domain) interval
+
+public export
+make_latitude_band : ExactRational → ExactRational → Maybe LatitudeBand
+make_latitude_band lower upper =
+  if is_valid_latitude (closed_interval lower upper)
+    then Just (ValidLatitudeBand (closed_interval lower upper))
+    else Nothing
+
+public export
+band_interval : LatitudeBand → exact_interval
+band_interval (ValidLatitudeBand interval) = interval
+
+-- Derive set containment and nonempty overlap using the *shared* exact
+-- interval implementation; do not reimplement interval arithmetic here.
+public export
+band_within : LatitudeBand → LatitudeBand → Bool
+band_within (ValidLatitudeBand finer) (ValidLatitudeBand coarser) =
+  interval_equal (intersect_interval finer coarser) finer
+
+public export
+bands_overlap : LatitudeBand → LatitudeBand → Bool
+bands_overlap (ValidLatitudeBand left) (ValidLatitudeBand right) =
+  not (interval_equal (intersect_interval left right) no_points)
+
+public export
+band_relation : LatitudeBand → LatitudeBand → cell_relation
+band_relation (ValidLatitudeBand possible) (ValidLatitudeBand fence) =
+  if interval_equal (intersect_interval possible fence) possible
+    then wholly_inside
+    else if interval_equal (intersect_interval possible fence) no_points
+      then wholly_outside
+      else indeterminate
+
+public export
+latitude_membership :
+  LatitudeBand →
+  LocationEstimate LatitudeBand →
+  fence_membership
+latitude_membership fence observation =
+  classify_location (\possible => band_relation possible fence) observation
+
+public export
+latitude_refines :
+  LocationEstimate LatitudeBand →
+  LocationEstimate LatitudeBand →
+  Bool
+latitude_refines = cellwise_refines band_within
+
+public export
+latitude_covers_overlap :
+  LocationEstimate LatitudeBand →
+  LocationEstimate LatitudeBand →
+  Bool
+latitude_covers_overlap = covers_overlap bands_overlap

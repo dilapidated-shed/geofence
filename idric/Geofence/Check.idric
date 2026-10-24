@@ -1,0 +1,351 @@
+module Geofence.Check
+
+import Geofence.Cover
+import Geofence.Latitude
+import Geofence.Longitude
+import Geofence.Sphere
+import Interval.Exact
+
+%unbound_implicits off
+
+-- These are compiler-checked equalities, not examples that only print a
+-- claimed answer. The first three use an abstract observational cover.
+choice sample_cell one_of
+  center
+  outskirts
+  crossing
+
+cell_to_fence : sample_cell → cell_relation
+cell_to_fence center = wholly_inside
+cell_to_fence outskirts = wholly_outside
+cell_to_fence crossing = indeterminate
+
+single_inside :
+  same_membership
+    (classify_location cell_to_fence (Candidates center []))
+    definitely_inside = True
+single_inside = Refl
+
+single_outside :
+  same_membership
+    (classify_location cell_to_fence (Candidates outskirts []))
+    definitely_outside = True
+single_outside = Refl
+
+uncertain_cell :
+  same_membership
+    (classify_location cell_to_fence (Candidates crossing []))
+    ambiguous = True
+uncertain_cell = Refl
+
+different_possible_places :
+  same_membership
+    (classify_location cell_to_fence (Candidates center [outskirts]))
+    ambiguous = True
+different_possible_places = Refl
+
+all_inside :
+  same_membership
+    (classify_location cell_to_fence (Candidates center [center]))
+    definitely_inside = True
+all_inside = Refl
+
+uncertain_alternative :
+  same_membership
+    (classify_location cell_to_fence (Candidates center [crossing]))
+    ambiguous = True
+uncertain_alternative = Refl
+
+has_band : Maybe LatitudeBand → Bool
+has_band (Just _) = True
+has_band Nothing = False
+
+latitude_limits_admitted :
+  has_band (make_latitude_band (whole (-90)) (whole 90)) = True
+latitude_limits_admitted = Refl
+
+out_of_range_rejected :
+  has_band (make_latitude_band (whole 90) (whole 91)) = False
+out_of_range_rejected = Refl
+
+reversed_endpoints_rejected :
+  has_band (make_latitude_band (whole 20) (whole 10)) = False
+reversed_endpoints_rejected = Refl
+
+-- These examples exercise the actual exact-interval implementation.
+closed_band_decision :
+  ExactRational →
+  ExactRational →
+  ExactRational →
+  ExactRational →
+  Maybe fence_membership
+closed_band_decision observed_lower observed_upper fence_lower fence_upper =
+  case make_latitude_band observed_lower observed_upper of
+    Nothing => Nothing
+    Just observed =>
+      case make_latitude_band fence_lower fence_upper of
+        Nothing => Nothing
+        Just fence =>
+          Just (latitude_membership fence (Candidates observed []))
+
+latitude_fully_inside :
+  closed_band_decision
+    (whole 12) (whole 13) (whole 10) (whole 20) =
+    Just definitely_inside
+latitude_fully_inside = Refl
+
+latitude_fully_outside :
+  closed_band_decision
+    (whole 21) (whole 22) (whole 10) (whole 20) =
+    Just definitely_outside
+latitude_fully_outside = Refl
+
+latitude_straddling_boundary :
+  closed_band_decision
+    (whole 19) (whole 21) (whole 10) (whole 20) =
+    Just ambiguous
+latitude_straddling_boundary = Refl
+
+-- A shared closed endpoint does count as overlap.
+latitude_touching_closed_endpoint :
+  closed_band_decision
+    (whole 20) (whole 21) (whole 10) (whole 20) =
+    Just ambiguous
+latitude_touching_closed_endpoint = Refl
+
+-- The whole estimated cell is necessary for a refinement, not merely
+-- one point from it.
+latitude_refinement_example : Bool
+latitude_refinement_example =
+  case make_latitude_band (whole 12) (whole 13) of
+    Nothing => False
+    Just finer =>
+      case make_latitude_band (whole 10) (whole 20) of
+        Nothing => False
+        Just coarser =>
+          latitude_refines (Candidates finer []) (Candidates coarser [])
+
+latitude_refinement : latitude_refinement_example = True
+latitude_refinement = Refl
+latitude_not_refined_example : Bool
+latitude_not_refined_example =
+  case make_latitude_band (whole 10) (whole 20) of
+    Nothing => False
+    Just wider =>
+      case make_latitude_band (whole 12) (whole 13) of
+        Nothing => False
+        Just narrower =>
+          latitude_refines (Candidates wider []) (Candidates narrower [])
+
+latitude_not_refined : latitude_not_refined_example = False
+latitude_not_refined = Refl
+latitude_disjoint_covers_example : Bool
+latitude_disjoint_covers_example =
+  case make_latitude_band (whole 10) (whole 12) of
+    Nothing => True
+    Just first =>
+      case make_latitude_band (whole 13) (whole 14) of
+        Nothing => True
+        Just second =>
+          latitude_covers_overlap (Candidates first []) (Candidates second [])
+
+latitude_disjoint_covers : latitude_disjoint_covers_example = False
+latitude_disjoint_covers = Refl
+
+-- Circular longitude: exact reduction modulo one turn, including negative
+-- and fractional representatives and closed arcs crossing the antimeridian.
+longitude_negative_turn :
+  longitude_arc_within
+    (closed_longitude_arc (whole (-10)) (whole 10))
+    (closed_longitude_arc (whole 350) (whole 370)) = True
+longitude_negative_turn = Refl
+
+longitude_positive_turn :
+  longitude_arc_within
+    (closed_longitude_arc (whole 360) (whole 360))
+    (closed_longitude_arc (whole 0) (whole 0)) = True
+longitude_positive_turn = Refl
+
+longitude_fractional_turn :
+  longitude_arc_within
+    (closed_longitude_arc (over (-1) (OnePlus 1)) (whole 3))
+    (closed_longitude_arc (over 719 (OnePlus 1)) (whole 363)) = True
+longitude_fractional_turn = Refl
+
+longitude_crosses_antimeridian :
+  longitude_arc_within
+    (closed_longitude_arc (whole 355) (whole 5))
+    (closed_longitude_arc (whole 350) (whole 10)) = True
+longitude_crosses_antimeridian = Refl
+
+longitude_disjoint_arcs :
+  longitude_arcs_overlap
+    (closed_longitude_arc (whole 350) (whole 10))
+    (closed_longitude_arc (whole 20) (whole 30)) = False
+longitude_disjoint_arcs = Refl
+
+longitude_seam_contact :
+  longitude_arcs_overlap
+    (closed_longitude_arc (whole 350) (whole 0))
+    (closed_longitude_arc (whole 0) (whole 10)) = True
+longitude_seam_contact = Refl
+
+longitude_singleton_not_entire_circle :
+  longitude_arc_within
+    all_longitudes
+    (closed_longitude_arc (whole 0) (whole 360)) = False
+longitude_singleton_not_entire_circle = Refl
+
+-- Evaluate exact quotient-patch relations through the checked constructors,
+-- retaining Maybe when a latitude band would be invalid.
+spherical_fixture :
+  ExactRational → ExactRational → ExactRational → ExactRational →
+  ExactRational → ExactRational → ExactRational → ExactRational →
+  Maybe fence_membership
+spherical_fixture observed_lower observed_upper observed_start observed_end
+                  fence_lower fence_upper fence_start fence_end =
+  case make_spherical_patch observed_lower observed_upper observed_start observed_end of
+    Nothing => Nothing
+    Just observed =>
+      case make_spherical_patch fence_lower fence_upper fence_start fence_end of
+        Nothing => Nothing
+        Just fence =>
+          Just (spherical_membership fence (Candidates observed []))
+
+spherical_crossing_inside :
+  spherical_fixture
+    (whole 10) (whole 11) (whole 358) (whole 2)
+    (whole 9) (whole 12) (whole 350) (whole 10) =
+    Just definitely_inside
+spherical_crossing_inside = Refl
+
+-- The observation crosses the longitude boundary even though both arcs
+-- touch the antimeridian. Do not convert boundary uncertainty to a Bool.
+spherical_crossing_uncertain :
+  spherical_fixture
+    (whole 10) (whole 11) (whole 358) (whole 2)
+    (whole 9) (whole 12) (whole 0) (whole 10) =
+    Just ambiguous
+spherical_crossing_uncertain = Refl
+
+spherical_crossing_outside :
+  spherical_fixture
+    (whole 10) (whole 11) (whole 20) (whole 30)
+    (whole 9) (whole 12) (whole 350) (whole 10) =
+    Just definitely_outside
+spherical_crossing_outside = Refl
+
+-- Identifying longitudes at either pole must follow from quotient membership,
+-- not only from raw coordinate equality.
+spherical_points_equal :
+  ExactRational → ExactRational → ExactRational → ExactRational →
+  Maybe Bool
+spherical_points_equal first_lat first_lon second_lat second_lon =
+  case make_spherical_patch first_lat first_lat first_lon first_lon of
+    Nothing => Nothing
+    Just first =>
+      case make_spherical_patch second_lat second_lat second_lon second_lon of
+        Nothing => Nothing
+        Just second => Just (spherical_patches_equal first second)
+
+north_pole_longitudes_identified :
+  spherical_points_equal (whole 90) (whole 0) (whole 90) (whole 180)
+  = Just True
+north_pole_longitudes_identified = Refl
+
+south_pole_longitudes_identified :
+  spherical_points_equal (whole (-90)) (whole (-170))
+                         (whole (-90)) (whole 60)
+  = Just True
+south_pole_longitudes_identified = Refl
+
+nonpolar_longitudes_distinct :
+  spherical_points_equal (whole 89) (whole 0) (whole 89) (whole 180)
+  = Just False
+nonpolar_longitudes_distinct = Refl
+
+opposite_poles_distinct :
+  spherical_points_equal (whole 90) (whole 0) (whole (-90)) (whole 0)
+  = Just False
+opposite_poles_distinct = Refl
+
+north_pole_inside_other_meridian_fence :
+  spherical_fixture
+    (whole 90) (whole 90) (whole 180) (whole 180)
+    (whole 80) (whole 90) (whole 0) (whole 0) =
+    Just definitely_inside
+north_pole_inside_other_meridian_fence = Refl
+
+-- An uncertain band includes the pole AND nonpolar points outside the fence:
+-- it intersects the fence at the pole, but is not wholly inside.
+north_pole_boundary_uncertain :
+  spherical_fixture
+    (whole 89) (whole 90) (whole 180) (whole 180)
+    (whole 90) (whole 90) (whole 0) (whole 0) =
+    Just ambiguous
+north_pole_boundary_uncertain = Refl
+
+south_pole_boundary_uncertain :
+  spherical_fixture
+    (whole (-90)) (whole (-89)) (whole 120) (whole 120)
+    (whole (-90)) (whole (-90)) (whole 0) (whole 0) =
+    Just ambiguous
+south_pole_boundary_uncertain = Refl
+
+near_pole_outside_other_meridian_fence :
+  spherical_fixture
+    (whole 89) (whole 89) (whole 180) (whole 180)
+    (whole 80) (whole 90) (whole 0) (whole 0) =
+    Just definitely_outside
+near_pole_outside_other_meridian_fence = Refl
+
+-- The existing nonempty covers, cellwise refinement, and three-valued join
+-- remain the observation semantics for the spherical cells.
+spherical_cover_fixture : Maybe fence_membership
+spherical_cover_fixture =
+  case make_spherical_patch (whole 10) (whole 11) (whole 355) (whole 5) of
+    Nothing => Nothing
+    Just inside =>
+      case make_spherical_patch (whole 10) (whole 11) (whole 20) (whole 25) of
+        Nothing => Nothing
+        Just outside =>
+          case make_spherical_patch (whole 9) (whole 12) (whole 350) (whole 10) of
+            Nothing => Nothing
+            Just fence =>
+              Just (spherical_membership fence (Candidates inside [outside]))
+
+spherical_mixed_cover_uncertain :
+  spherical_cover_fixture = Just ambiguous
+spherical_mixed_cover_uncertain = Refl
+
+spherical_refinement_fixture : Bool
+spherical_refinement_fixture =
+  case make_spherical_patch (whole 10) (whole 11) (whole 355) (whole 5) of
+    Nothing => False
+    Just finer =>
+      case make_spherical_patch (whole 9) (whole 12) (whole 350) (whole 10) of
+        Nothing => False
+        Just coarser =>
+          spherical_refines (Candidates finer []) (Candidates coarser [])
+
+spherical_refinement_preserved :
+  spherical_refinement_fixture = True
+spherical_refinement_preserved = Refl
+
+spherical_polar_cover_overlap_fixture : Bool
+spherical_polar_cover_overlap_fixture =
+  case make_spherical_patch (whole 89) (whole 90) (whole 180) (whole 180) of
+    Nothing => False
+    Just first =>
+      case make_spherical_patch (whole 90) (whole 90) (whole 0) (whole 0) of
+        Nothing => False
+        Just second =>
+          spherical_covers_overlap (Candidates first []) (Candidates second [])
+
+spherical_polar_cover_overlap :
+  spherical_polar_cover_overlap_fixture = True
+spherical_polar_cover_overlap = Refl
+
+
+main : IO ()
+main = putStrLn "Idriç geofence cover/latitude/circular-sphere checks: PASS"
