@@ -113,7 +113,8 @@ latitude_touching_closed_endpoint = Refl
 
 -- The whole estimated cell is necessary for a refinement, not merely
 -- one point from it.
-latitude_refinement :
+latitude_refinement_example : Bool
+latitude_refinement_example =
   case make_latitude_band (whole 12) (whole 13) of
     Nothing => False
     Just finer =>
@@ -121,10 +122,11 @@ latitude_refinement :
         Nothing => False
         Just coarser =>
           latitude_refines (Candidates finer []) (Candidates coarser [])
-  = True
-latitude_refinement = Refl
 
-latitude_not_refined :
+latitude_refinement : latitude_refinement_example = True
+latitude_refinement = Refl
+latitude_not_refined_example : Bool
+latitude_not_refined_example =
   case make_latitude_band (whole 10) (whole 20) of
     Nothing => False
     Just wider =>
@@ -132,10 +134,11 @@ latitude_not_refined :
         Nothing => False
         Just narrower =>
           latitude_refines (Candidates wider []) (Candidates narrower [])
-  = False
-latitude_not_refined = Refl
 
-latitude_disjoint_covers :
+latitude_not_refined : latitude_not_refined_example = False
+latitude_not_refined = Refl
+latitude_disjoint_covers_example : Bool
+latitude_disjoint_covers_example =
   case make_latitude_band (whole 10) (whole 12) of
     Nothing => True
     Just first =>
@@ -143,8 +146,8 @@ latitude_disjoint_covers :
         Nothing => True
         Just second =>
           latitude_covers_overlap (Candidates first []) (Candidates second [])
-  = False
-latitude_disjoint_covers = Refl
 
+latitude_disjoint_covers : latitude_disjoint_covers_example = False
+latitude_disjoint_covers = Refl
 main : IO ()
 main = putStrLn "Idriç geofence cover/latitude checks: PASS"
