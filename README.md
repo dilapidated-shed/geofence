@@ -4,7 +4,7 @@ Experiments in treating physical locations and geofences as imprecise, cover-bas
 
 A phrase such as “Ypsilanti, Michigan” usually denotes a region at a useful scale, not a point. This repository will explore representations that preserve uncertainty, overlap, refinement, containment, and local-to-global consistency. Candidate tools include covers and their nerves, Čech and Vietoris–Rips complexes, cellular sheaves and cosheaves, and explicit precision or refinement relations.
 
-This is a research notebook, not yet a geofencing library. The first goal is to state the data model and operations before selecting an implementation language.
+This remains a research notebook, not a complete geofencing library or Android application. The first experimental computational model is written in Idriç, with ordinary GIS and circular-longitude geometry still to be developed.
 
 ## Intellectual provenance
 
@@ -26,4 +26,22 @@ See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for exact citations and for the dis
 
 ## Status
 
-Only scope and intellectual provenance are established. No API or implementation is claimed yet.
+The first executable Idriç slice is experimental and deliberately narrow:
+
+- [Geofence.Cover](idric/Geofence/Cover.idric): nonempty finite alternatives for an imprecise location, three-valued fence membership, cellwise cover refinement, and overlap. Geometry supplies the predicates rather than being silently replaced by coordinates.
+- [Geofence.Latitude](idric/Geofence/Latitude.idric): validated nonempty closed latitude bands in degrees, using [intervals.idr](https://github.com/dilapidated-shed/intervals.idr) for exact containment and intersection. This is a one-dimensional chart-axis example, **not** a spherical or WGS84 region.
+- [Geofence.Check](idric/Geofence/Check.idric): compiler-checked fixtures for definitely inside, definitely outside, ambiguous boundary crossings, alternatives, latitude limits, refinement, and overlap.
+
+The [acceptance workflow](.github/workflows/idric-geofence.yml) pins both Idriç and intervals.idr to exact commits. The interval implementation is checked out at build time; no second copy of interval semantics is kept here.
+
+With an available Idriç compiler, a local source checkout can build the fixtures using:
+
+```sh
+git clone https://github.com/dilapidated-shed/intervals.idr.git .deps/intervals
+git -C .deps/intervals checkout b3574ac06101f53a97c10839b420e656bd93bf46
+ln -s ../.deps/intervals/idric/Interval idric/Interval
+idris2 --build geofence-idric.ipkg
+./build/exec/geofence-idric-tests
+```
+
+The current work does **not** implement circular longitude, datum/chart transformations, spherical pole identification, polygonal fences, GNSS measurement processing, Android geofencing registration, UI, or on-device execution. That is the next engineering work; no Android behavior is claimed from a successful host-level Idriç test.
