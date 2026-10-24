@@ -1,0 +1,110 @@
+module Geofence.Sphere
+
+import Geofence.Cover
+import Geofence.Latitude
+import Geofence.Longitude
+import Interval.Exact
+
+%unbound_implicits off
+
+-- A quotient-rectangle experiment on the ROUND SPHERE as a set:
+--
+--   ([-90,90] × S¹) / ({-90} × S¹, {90} × S¹ collapsed separately).
+--
+-- Each patch is the image of a nonempty closed latitude band times a
+-- nonempty closed circular arc under that quotient map. In particular every
+-- longitude at a given pole is the SAME mathematical point. This defines
+-- finite sets of patches, not arbitrary regions, spherical distances,
+-- ellipsoidal Earth geometry, or geographic CRS transformations.
+export
+data SphericalPatch : Type where
+  ChartPatch : LatitudeBand → LongitudeArc → SphericalPatch
+
+public export
+spherical_patch : LatitudeBand → LongitudeArc → SphericalPatch
+spherical_patch = ChartPatch
+
+public export
+make_spherical_patch :
+  ExactRational → ExactRational →
+  ExactRational → ExactRational →
+  Maybe SphericalPatch
+make_spherical_patch latitude_lower latitude_upper longitude_start longitude_end =
+  case make_latitude_band latitude_lower latitude_upper of
+    Nothing => Nothing
+    Just latitude =>
+      Just (spherical_patch latitude
+        (closed_longitude_arc longitude_start longitude_end))
+
+public export
+is_only_pole : LatitudeBand → Bool
+is_only_pole latitude =
+  interval_equal (band_interval latitude)
+    (closed_interval (whole 90) (whole 90)) ||
+  interval_equal (band_interval latitude)
+    (closed_interval (whole (-90)) (whole (-90)))
+
+public export
+has_north_pole : LatitudeBand → Bool
+has_north_pole latitude = contains (band_interval latitude) (whole 90)
+
+public export
+has_south_pole : LatitudeBand → Bool
+has_south_pole latitude = contains (band_interval latitude) (whole (-90))
+
+-- Latitude inclusion is necessary; for a patch with nonpolar points,
+-- longitude inclusion is necessary too. A patch consisting of exactly one
+-- pole is longitude-independent by the quotient.
+public export
+spherical_patch_within : SphericalPatch → SphericalPatch → Bool
+spherical_patch_within (ChartPatch latitude longitude)
+                       (ChartPatch other_latitude other_longitude) =
+  band_within latitude other_latitude &&
+  (is_only_pole latitude || longitude_arc_within longitude other_longitude)
+
+-- Disjoint longitude arcs can still intersect at a common pole.
+public export
+spherical_patches_overlap : SphericalPatch → SphericalPatch → Bool
+spherical_patches_overlap (ChartPatch latitude longitude)
+                          (ChartPatch other_latitude other_longitude) =
+  (bands_overlap latitude other_latitude &&
+    longitude_arcs_overlap longitude other_longitude) ||
+  (has_north_pole latitude && has_north_pole other_latitude) ||
+  (has_south_pole latitude && has_south_pole other_latitude)
+
+public export
+spherical_patches_equal : SphericalPatch → SphericalPatch → Bool
+spherical_patches_equal first second =
+  spherical_patch_within first second &&
+  spherical_patch_within second first
+
+public export
+spherical_cell_relation : SphericalPatch → SphericalPatch → cell_relation
+spherical_cell_relation possible fence =
+  if spherical_patch_within possible fence
+    then wholly_inside
+    else if spherical_patches_overlap possible fence
+      then indeterminate
+      else wholly_outside
+
+public export
+spherical_membership :
+  SphericalPatch →
+  LocationEstimate SphericalPatch →
+  fence_membership
+spherical_membership fence observation =
+  classify_location (\possible => spherical_cell_relation possible fence) observation
+
+public export
+spherical_refines :
+  LocationEstimate SphericalPatch →
+  LocationEstimate SphericalPatch →
+  Bool
+spherical_refines = cellwise_refines spherical_patch_within
+
+public export
+spherical_covers_overlap :
+  LocationEstimate SphericalPatch →
+  LocationEstimate SphericalPatch →
+  Bool
+spherical_covers_overlap = covers_overlap spherical_patches_overlap
