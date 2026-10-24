@@ -1,0 +1,151 @@
+module Geofence.Cover
+
+%unbound_implicits off
+
+-- A nonempty finite collection of possible regions. A candidate is a region,
+-- not necessarily a mathematical point or an independent observation. Its
+-- relation to a fence is supplied by an appropriate geometry.
+public export
+data LocationEstimate : Type → Type where
+  Candidates :
+    {cell : Type} →
+    (first : cell) →
+    (others : List cell) →
+    LocationEstimate cell
+
+-- A candidate cell may be wholly in a fence, wholly out, or cross/overlap a
+-- fence boundary. The last case must not be coerced into inside or outside.
+public export
+choice cell_relation one_of
+  wholly_inside
+  wholly_outside
+  indeterminate
+
+public export
+choice fence_membership one_of
+  definitely_inside
+  definitely_outside
+  ambiguous
+
+public export
+same_membership : fence_membership → fence_membership → Bool
+same_membership definitely_inside definitely_inside = True
+same_membership definitely_outside definitely_outside = True
+same_membership ambiguous ambiguous = True
+same_membership _ _ = False
+
+public export
+membership_of_cell : cell_relation → fence_membership
+membership_of_cell wholly_inside = definitely_inside
+membership_of_cell wholly_outside = definitely_outside
+membership_of_cell indeterminate = ambiguous
+
+-- Combining alternatives is a join of claims, not a probabilistic average.
+-- Mixed or unresolved possibilities must remain ambiguous.
+public export
+join_membership : fence_membership → fence_membership → fence_membership
+join_membership definitely_inside definitely_inside = definitely_inside
+join_membership definitely_outside definitely_outside = definitely_outside
+join_membership _ _ = ambiguous
+
+public export
+classify_remaining :
+  {cell : Type} →
+  (cell → cell_relation) →
+  fence_membership →
+  List cell →
+  fence_membership
+classify_remaining relation previous [] = previous
+classify_remaining relation previous (next :: rest) =
+  classify_remaining relation
+    (join_membership previous (membership_of_cell (relation next)))
+    rest
+
+public export
+classify_location :
+  {cell : Type} →
+  (cell → cell_relation) →
+  LocationEstimate cell →
+  fence_membership
+classify_location relation (Candidates first others) =
+  classify_remaining relation (membership_of_cell (relation first)) others
+
+-- Every finer candidate must be contained in some coarse candidate.
+-- This is cellwise cover refinement; it does not claim completeness for
+-- arbitrary set unions or a topological refinement theorem.
+public export
+some_related :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  cell →
+  List cell →
+  Bool
+some_related relation left [] = False
+some_related relation left (right :: rest) =
+  relation left right || some_related relation left rest
+
+public export
+contained_in_some :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  cell →
+  LocationEstimate cell →
+  Bool
+contained_in_some contained finer (Candidates first others) =
+  contained finer first || some_related contained finer others
+
+public export
+all_contained :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  LocationEstimate cell →
+  List cell →
+  Bool
+all_contained contained coarse [] = True
+all_contained contained coarse (finer :: rest) =
+  contained_in_some contained finer coarse &&
+  all_contained contained coarse rest
+
+public export
+cellwise_refines :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  LocationEstimate cell →
+  LocationEstimate cell →
+  Bool
+cellwise_refines contained (Candidates first others) coarse =
+  contained_in_some contained first coarse &&
+  all_contained contained coarse others
+
+public export
+pair_overlaps :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  cell →
+  LocationEstimate cell →
+  Bool
+pair_overlaps intersects left (Candidates first others) =
+  intersects left first || some_related intersects left others
+
+public export
+some_pair_overlaps :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  List cell →
+  LocationEstimate cell →
+  Bool
+some_pair_overlaps intersects [] other = False
+some_pair_overlaps intersects (first :: rest) other =
+  pair_overlaps intersects first other ||
+  some_pair_overlaps intersects rest other
+
+public export
+covers_overlap :
+  {cell : Type} →
+  (cell → cell → Bool) →
+  LocationEstimate cell →
+  LocationEstimate cell →
+  Bool
+covers_overlap intersects (Candidates first others) second =
+  pair_overlaps intersects first second ||
+  some_pair_overlaps intersects others second
